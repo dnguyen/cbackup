@@ -6,11 +6,20 @@
 #include <vector>
 #include <QSettings>
 #include <QStringList>
+#include <QFileSystemWatcher>
+#include <QDir>
+#include <QDirIterator>
+#include <QDebug>
+
+#include "BackupPathsWatcher.h"
+
 using namespace std;
 
 vector<QString> fileBackups;
 vector <QString> directoryBackups;
 
+// Load settings from settings.ini file.
+// Includes file and directory paths.
 void loadSettings() {
     QString filePath("/settings.ini");
 
@@ -42,18 +51,55 @@ void loadSettings() {
     }
 }
 
+void addDirectoriesToWatcher(QFileSystemWatcher &watcher) {
+
+    foreach (const QString directoryPath, directoryBackups) {
+
+        // Add root directory to watcher
+        watcher.addPath(directoryPath);
+
+        // Add its subdirectories
+        QDirIterator dirIterator(directoryPath, QDirIterator::Subdirectories);
+        while (dirIterator.hasNext()) {
+            QString dirPath = dirIterator.next();
+            QDir dir(dirPath);
+
+            if (dir.dirName() != "." && dir.dirName() != "..") {
+                cout << dirPath.toStdString() << endl;
+                watcher.addPath(dirPath);
+            }
+        }
+    }
+}
+
+void addPathsToWatcher(QFileSystemWatcher &watcher) {
+    foreach (const QString filePath, fileBackups) {
+        watcher.addPath(filePath);
+    }
+
+    addDirectoriesToWatcher(watcher);
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
 
     cout << "Command list" << endl;
-    cout << "\tcreate [-f, -d] [file path]" << endl;
+    cout << "\tCreates a backup for a file or directory (and subdirectories)." << "\n\t\tcreate [-f, -d] [file path]" << endl;
     cout << "\tquit" << endl;
     cout << endl;
 
     loadSettings();
 
-    bool status = true;
+    QFileSystemWatcher watcher;
+    addPathsToWatcher(watcher);
+
+    BackupPathsWatcher* backupWatcher = new BackupPathsWatcher;
+
+    QObject::connect(&watcher, SIGNAL(fileChanged(QString)), backupWatcher, SLOT(file_changed(QString)));
+    QObject::connect(&watcher, SIGNAL(directoryChanged(QString)), backupWatcher, SLOT(directory_changed(QString)));
+
+    /*bool status = true;
     while (status) {
         string enteredText;
         string command = "";
@@ -80,7 +126,7 @@ int main(int argc, char *argv[])
         cin.clear();
 
         //getline(cin, enteredText);
-    }
+    }*/
 
     return a.exec();
 }
