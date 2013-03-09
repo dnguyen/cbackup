@@ -4,68 +4,68 @@
 #include <QString>
 #include <iostream>
 #include <vector>
-#include <QSettings>
 #include <QStringList>
 #include <QFileSystemWatcher>
 #include <QDir>
 #include <QDirIterator>
 #include <QDebug>
+#include <QMap>
+#include <QVariant>
+#include <QVariantMap>
 
 #include "BackupPathsWatcher.h"
+#include "Backup.h"
+#include "json.h"
 
+using namespace QtJson;
 using namespace std;
 
-vector<QString> fileBackups;
-vector <QString> directoryBackups;
+vector<Backup> backups;
 
-// Load settings from settings.ini file.
+// Load settings from settings.js file.
 // Includes file and directory paths.
 void loadSettings() {
-    QString filePath("/settings.ini");
+    QString filePath(QCoreApplication::applicationDirPath() + "/settings.js");
 
-    QSettings settings(QCoreApplication::applicationDirPath() + filePath, QSettings::IniFormat);
+    QFile settingsFile(filePath);
+    if (!settingsFile.open(QIODevice::ReadOnly))
+        cout << "Error with opening file" << endl;
 
-
-    cout << "Load file paths: " << endl;
-    settings.beginGroup("FileBackups");
-    const QStringList fileBackupPathKeys = settings.childKeys();
-
-    cout << "File Paths Length: " << fileBackupPathKeys.length() << endl;
-
-    foreach (const QString &filePathKey, fileBackupPathKeys) {
-        cout << "\t" << QString(settings.value(filePathKey).toString()).toStdString() << endl;
-        fileBackups.push_back(QString(settings.value(filePathKey).toString()));
+    QTextStream in(&settingsFile);
+    QString settingsFileContents;
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        settingsFileContents += line;
     }
-    settings.endGroup();
+    settingsFile.close();
 
+    bool jsonParseStatus;
+    QVariantMap settingsJson = QtJson::parse(settingsFileContents, jsonParseStatus).toMap();
+    if (!jsonParseStatus)
+        cout << "Failed to read json" << endl;
 
-    cout << "Load directory paths " << endl;
-    settings.beginGroup("DirectoryBackups");
-    const QStringList directoryBackupPathKeys = settings.childKeys();
-
-    cout << "Directory Paths length: " << directoryBackupPathKeys.length() << endl;
-
-    foreach (const QString &directoryPathKey, directoryBackupPathKeys) {
-        cout << "\t" << QString(settings.value(directoryPathKey).toString()).toStdString() << endl;
-        directoryBackups.push_back(QString(settings.value(directoryPathKey).toString()));
+    foreach (QVariant backup, settingsJson["backups"].toList()) {
+        qDebug() << backup.toMap()["name"].toString() << endl;
+        QMap<QString, QVariant> backupMap = backup.toMap();
+        Backup backupObj(backupMap["name"].toString(), backupMap["mainPath"].toString(), backupMap["backupPath"].toString());
+        backups.push_back(backupObj);
     }
 }
 
-void addDirectoriesToWatcher(QFileSystemWatcher &watcher) {
+void addBackupPathsToWatcher(QFileSystemWatcher &watcher) {
 
-    foreach (const QString directoryPath, directoryBackups) {
-
+    foreach (Backup backup, backups) {
         // Add root directory to watcher
-        watcher.addPath(directoryPath);
+        watcher.addPath(backup.getMainPath());
 
         // Add its subdirectories
-        QDirIterator dirIterator(directoryPath, QDirIterator::Subdirectories);
+        QDirIterator dirIterator(backup.getMainPath(), QDirIterator::Subdirectories);
         while (dirIterator.hasNext()) {
             QString dirPath = dirIterator.next();
             QDir dir(dirPath);
 
             if (dir.dirName() != "." && dir.dirName() != "..") {
-                cout << dirPath.toStdString() << endl;
+                cout << "Adding to watcher: " << dirPath.toStdString() << endl;
                 watcher.addPath(dirPath);
             }
         }
@@ -73,11 +73,7 @@ void addDirectoriesToWatcher(QFileSystemWatcher &watcher) {
 }
 
 void addPathsToWatcher(QFileSystemWatcher &watcher) {
-    foreach (const QString filePath, fileBackups) {
-        watcher.addPath(filePath);
-    }
-
-    addDirectoriesToWatcher(watcher);
+    addBackupPathsToWatcher(watcher);
 }
 
 int main(int argc, char *argv[])
@@ -86,6 +82,7 @@ int main(int argc, char *argv[])
 
     cout << "Command list" << endl;
     cout << "\tCreates a backup for a file or directory (and subdirectories)." << "\n\t\tcreate [-f, -d] [file path]" << endl;
+    cout << "\tExit out of command mode" << "\n\t\tsleep" << endl;
     cout << "\tquit" << endl;
     cout << endl;
 
@@ -99,34 +96,45 @@ int main(int argc, char *argv[])
     QObject::connect(&watcher, SIGNAL(fileChanged(QString)), backupWatcher, SLOT(file_changed(QString)));
     QObject::connect(&watcher, SIGNAL(directoryChanged(QString)), backupWatcher, SLOT(directory_changed(QString)));
 
-    /*bool status = true;
+    // start waiting for commands
+    bool status = false;
     while (status) {
-        string enteredText;
-        string command = "";
+        cout << "Enter a command: ";
+        QTextStream qtin(stdin);
+        QString line = qtin.readLine();
 
-        cin >> command; // use first word as command.
+        QStringList lineSplit = line.split(' ');
+        if (lineSplit.at(0) == "create") {
+            cout << "Enter path of file or directory: ";
 
-        if (command == "create") {
-            cout << "Create a backup" << endl;
-            // Get option to backup a file or a directory.
-            string option = "";
-            cin >> option;
-            if (option != "") {
-                // Get file/directory path
-                string path = "";
-                cin >> path;
+            QString path;
+            qtin >> path;
+            QDir enteredPath(path);
 
-                cout << "Create backup of " << option << " at " << path << endl;
+            if (enteredPath.exists()) {
+                cout << "Enter backup path: ";
+
+                QString backupPath;
+                qtin >> backupPath;
+                QDir qDirBackupPath(backupPath);
+
+                if (qDirBackupPath.exists()) {
+                    // Create backup
+                    //Backup backup(path, backupPath);
+
+                } else {
+                    cout << "Path does not exist" << endl;
+                }
             } else {
-                cout << "No option";
+                cout << "Path does not exist" << endl;
             }
-        } else if (command == "quit") {
-            exit(EXIT_SUCCESS);
-        }
-        cin.clear();
 
-        //getline(cin, enteredText);
-    }*/
+        } else if (lineSplit.at(0) == "sleep") {
+            status = false;
+        } else {
+            cout << "Invalid command" << endl;
+        }
+    }
 
     return a.exec();
 }

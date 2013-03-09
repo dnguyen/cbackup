@@ -15,7 +15,11 @@ CONFIG   -= app_bundle
 TEMPLATE = app
 
 
-SOURCES += main.cpp
+SOURCES += main.cpp \
+    Backup.cpp \
+    json.cpp
 
 HEADERS += \
-    BackupPathsWatcher.h
+    BackupPathsWatcher.h \
+    Backup.h \
+    json.h
