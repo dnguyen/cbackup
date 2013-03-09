@@ -2,6 +2,7 @@
 #define BACKUPSYSTEM_H
 
 #include <QCoreApplication>
+#include <QDataStream>
 #include <QDirIterator>
 #include <QDebug>
 #include <QFile>

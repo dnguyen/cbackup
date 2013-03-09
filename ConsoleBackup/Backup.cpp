@@ -6,5 +6,6 @@ Backup::Backup(QString name, QString path, QString backupPath) {
     this->backupPath = backupPath;
 }
 
+QString Backup::getName() { return this->name; }
 QString Backup::getMainPath() { return this->mainPath; }
 QString Backup::getBackupPath() { return this->backupPath; }

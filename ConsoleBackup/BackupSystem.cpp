@@ -16,6 +16,8 @@ BackupSystem::BackupSystem() {
 
 
 void BackupSystem::load() {
+    cout << "Loading settings" << endl;
+
     QString filePath(QCoreApplication::applicationDirPath() + "/settings.js");
 
     QFile settingsFile(filePath);
@@ -35,11 +37,18 @@ void BackupSystem::load() {
     if (!jsonParseStatus)
         cout << "Failed to read json" << endl;
 
-    foreach (QVariant backup, settingsJson["backups"].toList()) {
-        qDebug() << backup.toMap()["name"].toString() << endl;
-        QMap<QString, QVariant> backupMap = backup.toMap();
-        Backup backupObj(backupMap["name"].toString(), backupMap["mainPath"].toString(), backupMap["backupPath"].toString());
+    int count = 0;
+    foreach (QVariant backup, settingsJson["backups"].toMap()) {
+        QString name = settingsJson["backups"].toMap().keys().at(count);
+        qDebug() << "\t" << name << endl;
+        QString mainPath = backup.toMap()["mainPath"].toString();
+        qDebug() << "\t\t" << mainPath << endl;
+        QString backupPath = backup.toMap()["backupPath"].toString();
+        qDebug() << "\t\t" << backupPath << endl;
+
+        Backup backupObj(name, mainPath, backupPath);
         backups.push_back(backupObj);
+        count++;
     }
 }
 
@@ -65,4 +74,23 @@ void BackupSystem::addBackupsToWatcher() {
 void BackupSystem::addBackup(Backup backup) {
     this->watcher.addPath(backup.getMainPath());
     this->backups.push_back(backup);
+
+    // Save settings json file
+    QVariantMap backupsMap;
+
+    foreach (Backup backup, this->backups) {
+        QVariantMap backupMap;
+        backupMap["mainPath"] = backup.getMainPath();
+        backupMap["backupPath"] = backup.getBackupPath();
+        backupsMap[backup.getName()] = backupMap;
+    }
+
+    QVariantMap mainMap;
+    mainMap["backups"] = backupsMap;
+
+    QByteArray data = QtJson::serialize(mainMap);
+    QFile file(QCoreApplication::applicationDirPath() + "/settings.js");
+    file.open(QIODevice::WriteOnly);
+    file.write(data);
+    file.close();
 }
