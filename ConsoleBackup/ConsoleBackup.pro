@@ -17,9 +17,11 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
     Backup.cpp \
-    json.cpp
+    json.cpp \
+    BackupSystem.cpp
 
 HEADERS += \
     BackupPathsWatcher.h \
     Backup.h \
-    json.h
+    json.h \
+    BackupSystem.h

@@ -1,80 +1,14 @@
 #include <QCoreApplication>
-#include <QFile>
 #include <QTextStream>
 #include <QString>
 #include <iostream>
-#include <vector>
 #include <QStringList>
-#include <QFileSystemWatcher>
 #include <QDir>
-#include <QDirIterator>
-#include <QDebug>
-#include <QMap>
-#include <QVariant>
-#include <QVariantMap>
 
-#include "BackupPathsWatcher.h"
-#include "Backup.h"
-#include "json.h"
+#include "BackupSystem.h"
 
 using namespace QtJson;
 using namespace std;
-
-vector<Backup> backups;
-
-// Load settings from settings.js file.
-// Includes file and directory paths.
-void loadSettings() {
-    QString filePath(QCoreApplication::applicationDirPath() + "/settings.js");
-
-    QFile settingsFile(filePath);
-    if (!settingsFile.open(QIODevice::ReadOnly))
-        cout << "Error with opening file" << endl;
-
-    QTextStream in(&settingsFile);
-    QString settingsFileContents;
-    while (!in.atEnd()) {
-        QString line = in.readLine();
-        settingsFileContents += line;
-    }
-    settingsFile.close();
-
-    bool jsonParseStatus;
-    QVariantMap settingsJson = QtJson::parse(settingsFileContents, jsonParseStatus).toMap();
-    if (!jsonParseStatus)
-        cout << "Failed to read json" << endl;
-
-    foreach (QVariant backup, settingsJson["backups"].toList()) {
-        qDebug() << backup.toMap()["name"].toString() << endl;
-        QMap<QString, QVariant> backupMap = backup.toMap();
-        Backup backupObj(backupMap["name"].toString(), backupMap["mainPath"].toString(), backupMap["backupPath"].toString());
-        backups.push_back(backupObj);
-    }
-}
-
-void addBackupPathsToWatcher(QFileSystemWatcher &watcher) {
-
-    foreach (Backup backup, backups) {
-        // Add root directory to watcher
-        watcher.addPath(backup.getMainPath());
-
-        // Add its subdirectories
-        QDirIterator dirIterator(backup.getMainPath(), QDirIterator::Subdirectories);
-        while (dirIterator.hasNext()) {
-            QString dirPath = dirIterator.next();
-            QDir dir(dirPath);
-
-            if (dir.dirName() != "." && dir.dirName() != "..") {
-                cout << "Adding to watcher: " << dirPath.toStdString() << endl;
-                watcher.addPath(dirPath);
-            }
-        }
-    }
-}
-
-void addPathsToWatcher(QFileSystemWatcher &watcher) {
-    addBackupPathsToWatcher(watcher);
-}
 
 int main(int argc, char *argv[])
 {
@@ -86,15 +20,7 @@ int main(int argc, char *argv[])
     cout << "\tquit" << endl;
     cout << endl;
 
-    loadSettings();
-
-    QFileSystemWatcher watcher;
-    addPathsToWatcher(watcher);
-
-    BackupPathsWatcher* backupWatcher = new BackupPathsWatcher;
-
-    QObject::connect(&watcher, SIGNAL(fileChanged(QString)), backupWatcher, SLOT(file_changed(QString)));
-    QObject::connect(&watcher, SIGNAL(directoryChanged(QString)), backupWatcher, SLOT(directory_changed(QString)));
+    BackupSystem backupSystem;
 
     // start waiting for commands
     bool status = false;
@@ -105,6 +31,10 @@ int main(int argc, char *argv[])
 
         QStringList lineSplit = line.split(' ');
         if (lineSplit.at(0) == "create") {
+            cout << "Enter name for backup:" ;
+            QString name;
+            qtin >> name;
+
             cout << "Enter path of file or directory: ";
 
             QString path;
@@ -119,9 +49,9 @@ int main(int argc, char *argv[])
                 QDir qDirBackupPath(backupPath);
 
                 if (qDirBackupPath.exists()) {
-                    // Create backup
-                    //Backup backup(path, backupPath);
-
+                    // Create backup and add it to the list of backups.
+                    Backup backup(name, path, backupPath);
+                    backupSystem.addBackup(backup);
                 } else {
                     cout << "Path does not exist" << endl;
                 }
