@@ -21,7 +21,6 @@ int main(int argc, char *argv[])
     cout << endl;
 
     BackupSystem backupSystem;
-
     // start waiting for commands
     bool status = true;
     while (status) {
@@ -52,6 +51,8 @@ int main(int argc, char *argv[])
                     // Create backup and add it to the list of backups.
                     Backup backup(name, path, backupPath);
                     backupSystem.addBackup(backup);
+
+                    backupSystem.createBackup(backup);
                     cout << "Successfully created a backup" << endl;
                 } else {
                     cout << "Path does not exist" << endl;

@@ -13,6 +13,7 @@
 #include <QVariantMap>
 #include <vector>
 
+#include <sys/stat.h>
 #include "Backup.h"
 #include "json.h"
 
@@ -20,11 +21,13 @@ class BackupSystem {
 private:
     std::vector<Backup> backups;
     QFileSystemWatcher watcher;
+    void save();
 public:
     BackupSystem();
     void addBackup(Backup);
     void load();
     void addBackupsToWatcher();
+    void createBackup(Backup);
 };
 
 #endif // BACKUPSYSTEM_H

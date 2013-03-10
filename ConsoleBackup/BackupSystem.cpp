@@ -52,6 +52,72 @@ void BackupSystem::load() {
     }
 }
 
+void BackupSystem::save() {
+    QVariantMap backupsMap;
+
+    foreach (Backup backup, this->backups) {
+        QVariantMap backupMap;
+        backupMap["mainPath"] = backup.getMainPath();
+        backupMap["backupPath"] = backup.getBackupPath();
+        backupsMap[backup.getName()] = backupMap;
+    }
+
+    QVariantMap mainMap;
+    mainMap["backups"] = backupsMap;
+
+    QByteArray data = QtJson::serialize(mainMap);
+    QFile file(QCoreApplication::applicationDirPath() + "/settings.js");
+    file.open(QIODevice::WriteOnly);
+    file.write(data);
+    file.close();
+}
+
+/*
+ * Copy files/directories to backup path.
+ *      Replaces the file/directory's main path with the backup path.
+ */
+void BackupSystem::createBackup(Backup backup) {
+    QDirIterator dirIterator(backup.getMainPath(), QDirIterator::Subdirectories);
+    while (dirIterator.hasNext()) {
+        QString dirPath = dirIterator.next();
+        QDir dir(dirPath);
+
+        if (dir.dirName() != "." && dir.dirName() != "..") {
+            QString oldBackupPath = dirPath;
+            QString newBackupPath = dirPath.replace(backup.getMainPath(), backup.getBackupPath());
+            cout << "Creating backups for: " << endl;
+            cout << "\t" << oldBackupPath.toStdString() << " backup at : " << newBackupPath.toStdString() << endl;
+
+            // Check if the backup is a file or directory.
+            struct stat s;
+            if (stat(oldBackupPath.toStdString().c_str(), &s) == 0) {
+
+                // If is directory
+                if (s.st_mode & S_IFDIR) {
+                    cout << oldBackupPath.toStdString() << " Is directory" << endl;
+                    QDir newBackupDir;
+                    bool ok = newBackupDir.mkpath(newBackupPath);
+                    if (!ok) {
+                        cout << "Failed to create directory" << endl;
+                        return;
+                    }
+                // If is file
+                } else if (s.st_mode & S_IFREG) {
+                    cout << oldBackupPath.toStdString() << " is file" << endl;
+                    if (!QFile::copy(oldBackupPath, newBackupPath)) {
+                        cout << "Failed to copy file" << endl;
+                        return;
+                    }
+
+                }
+            } else {
+                cout << "error stat" << endl;
+                return;
+            }
+        }
+    }
+}
+
 void BackupSystem::addBackupsToWatcher() {
     foreach (Backup backup, this->backups) {
         // Add root directory to watcher
@@ -75,22 +141,5 @@ void BackupSystem::addBackup(Backup backup) {
     this->watcher.addPath(backup.getMainPath());
     this->backups.push_back(backup);
 
-    // Save settings json file
-    QVariantMap backupsMap;
-
-    foreach (Backup backup, this->backups) {
-        QVariantMap backupMap;
-        backupMap["mainPath"] = backup.getMainPath();
-        backupMap["backupPath"] = backup.getBackupPath();
-        backupsMap[backup.getName()] = backupMap;
-    }
-
-    QVariantMap mainMap;
-    mainMap["backups"] = backupsMap;
-
-    QByteArray data = QtJson::serialize(mainMap);
-    QFile file(QCoreApplication::applicationDirPath() + "/settings.js");
-    file.open(QIODevice::WriteOnly);
-    file.write(data);
-    file.close();
+    this->save();
 }
